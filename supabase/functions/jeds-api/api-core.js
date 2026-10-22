@@ -454,7 +454,7 @@ async function login(env, data, meta) {
 }
 async function createFirstAdmin(env, data, meta) {
   const expected = str(env.JED_ADMIN_SETUP_KEY);
-  if (!expected) throw new Error("Initial admin setup is not enabled. Configure the JED_ADMIN_SETUP_KEY secret in Cloudflare Pages, then reload this page.");
+  if (!expected) throw new Error("Initial admin setup is not enabled. Configure the JED_ADMIN_SETUP_KEY secret in Supabase Edge Function secrets, then reload this page.");
   if (!constantTimeEqual(str(data.setupKey || ""), expected)) throw new Error("The setup key is incorrect. Check the JED_ADMIN_SETUP_KEY Cloudflare secret.");
   if ((await accountUsers(env)).length) throw new Error("An account has already been created. Please sign in instead.");
   const user = await createUserRecord(env, data, "Admin", Object.assign({}, meta, { userName: str(data.displayName || data.username || "Initial administrator") }));
