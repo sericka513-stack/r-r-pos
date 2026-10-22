@@ -90,7 +90,7 @@ Deno.serve(async (req: Request) => {
       const table = legacyUpserts[action];
       const row = body.row ?? body.product ?? body.customer ?? body.supplier ?? body.settings;
       if (!row || typeof row !== "object" || Array.isArray(row)) return reply({ ok: false, error: "Missing record payload" }, 400);
-      if (!isAdmin && !CASHIER_TABLES.has(table)) return reply({ ok: false, error: "Insufficient role" }, 403);
+      if (!isAdmin && table !== "customers") return reply({ ok: false, error: "Only an administrator can modify this table" }, 403);
       const key = PRIMARY_KEYS[table];
       if (!key || !Object.hasOwn(row, key)) return reply({ ok: false, error: `Missing primary key: ${key || "not configured"}` }, 400);
       const { data, error } = await admin.from(table).upsert(row, { onConflict: key }).select().single();
@@ -116,7 +116,7 @@ Deno.serve(async (req: Request) => {
       if (!TABLES.includes(table) || table === "users" || table === "user_sessions" || !row || typeof row !== "object" || Array.isArray(row)) {
         return reply({ ok: false, error: "Unsupported table or invalid row" }, 400);
       }
-      if (!isAdmin && !CASHIER_TABLES.has(table)) return reply({ ok: false, error: "Insufficient role" }, 403);
+      if (!isAdmin && action !== "saveCustomer") return reply({ ok: false, error: "Only an administrator can modify this table" }, 403);
       const key = PRIMARY_KEYS[table];
       if (!key || !Object.hasOwn(row, key)) return reply({ ok: false, error: `Missing primary key: ${key || "not configured"}` }, 400);
       const { data, error } = await admin.from(table).upsert(row, { onConflict: key }).select().single();
@@ -131,10 +131,7 @@ Deno.serve(async (req: Request) => {
       if (!TABLES.includes(table) || !key || id === undefined || table === "users" || table === "user_sessions") {
         return reply({ ok: false, error: "Unsupported table or missing record ID" }, 400);
       }
-      if (!isAdmin && !CASHIER_TABLES.has(table)) return reply({ ok: false, error: "Insufficient role" }, 403);
-      if (!isAdmin && !["products", "customers", "categories", "gcash_transactions"].includes(table)) {
-        return reply({ ok: false, error: "Only an administrator can delete this record" }, 403);
-      }
+      if (!isAdmin) return reply({ ok: false, error: "Only an administrator can delete records" }, 403);
       const { error } = await admin.from(table).delete().eq(key, id);
       if (error) throw new Error(error.message);
       return reply({ ok: true });
