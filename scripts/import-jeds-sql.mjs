@@ -119,7 +119,7 @@ async function main() {
   if (!before) return;
 
   const summary = [];
-  const chunkSize = 75;
+  const chunkSize = 200;
   await pg.begin(async (tx) => {
     for (const table of tables) {
       const sourceColumns = sqlite.prepare("PRAGMA table_info(" + quoteIdent(table) + ")").all().map((r) => String(r.name));
