@@ -18,6 +18,7 @@ import postgres from "postgres";
 
 const inputPath = process.argv[2];
 const connectionString = process.env.SUPABASE_DB_URL;
+let currentStage = "startup";
 
 if (!inputPath) {
   console.error("Usage: node scripts/import-jeds-sql.mjs /path/to/jeds-minimart-production.sql");
@@ -127,18 +128,24 @@ function createInsert(table, columns, rows, destinationColumns) {
 }
 
 async function main() {
+  currentStage = "loading the SQL export into local SQLite";
   sqlite.exec(sourceSql);
+  currentStage = "listing source tables";
   const tables = sourceTables();
   if (!tables.length) throw new Error("The SQL export did not contain any tables.");
+  currentStage = "reading Supabase schema metadata";
   const metadata = await targetMetadata();
+  currentStage = "checking destination tables and row counts";
   const before = await validateDestination(tables, metadata);
   if (!before) return;
 
   const summary = [];
   const normalizedByTable = new Map();
   const chunkSize = 200;
+  currentStage = "opening the Supabase import transaction";
   await pg.begin(async (tx) => {
     for (const table of tables) {
+      currentStage = "importing table " + table;
       const sourceColumns = sqlite.prepare("PRAGMA table_info(" + quoteIdent(table) + ")").all().map((r) => String(r.name));
       if (!sourceColumns.length) continue;
       const rows = sqlite.prepare("SELECT * FROM " + quoteIdent(table) + " ORDER BY rowid").all();
@@ -154,6 +161,7 @@ async function main() {
       console.log("Imported " + table + ": " + rows.length + " row(s)" + (normalized ? "; converted " + normalized + " blank numeric field(s) to NULL" : ""));
     }
 
+    currentStage = "resetting the stock_movement identity sequence";
     // Explicitly inserted SQLite AUTOINCREMENT IDs do not advance a PostgreSQL
     // identity sequence automatically. Preserve the original IDs and reset it.
     const sequenceResult = await tx.unsafe(
@@ -171,6 +179,7 @@ async function main() {
     }
   });
 
+  currentStage = "verifying imported row counts";
   const verify = [];
   for (const table of tables) {
     const result = await pg.unsafe("SELECT COUNT(*)::bigint AS n FROM public." + quoteIdent(table));
@@ -185,13 +194,20 @@ async function main() {
   } else {
     console.log("Verified " + verify.length + " tables. Legacy users and records have been copied to Supabase PostgreSQL.");
   }
+  currentStage = "complete";
 }
 
 try {
   await main();
 } catch (error) {
   console.error("Import failed. The PostgreSQL transaction was rolled back where applicable.");
-  console.error(error instanceof Error ? error.message : "Unknown error");
+  console.error("Failure stage:", currentStage);
+  const e = error && typeof error === "object" ? error : null;
+  console.error("Error name:", e?.name ?? typeof error);
+  console.error("Error message:", e?.message === undefined ? "(no message property)" : JSON.stringify(e.message));
+  console.error("Error code:", e?.code ?? "(none)");
+  console.error("Error stack:", e?.stack ?? "(no stack available)");
+  if (e?.cause) console.error("Error cause:", String(e.cause));
   process.exitCode = 1;
 } finally {
   sqlite.close();
