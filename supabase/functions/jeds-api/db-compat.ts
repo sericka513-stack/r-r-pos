@@ -43,7 +43,7 @@ class PgPreparedStatement implements Prepared {
   async first(columnName?: string) { const result = await this.execute(this.pool), row = result[0] ?? null; if (columnName) return row ? row[columnName] ?? null : null; return row; }
   async run() { const result = await this.execute(this.pool); return { success: true, results: [], meta: { changes: resultCount(result), last_row_id: null, duration: 0 } }; }
 }
-export function createD1Compat(connectionString: string) {
+export function createPostgresCompat(connectionString: string) {
   const pool = postgres(connectionString, { max: 1, prepare: false, connect_timeout: 10, idle_timeout: 5, onnotice: () => {} });
   return {
     prepare(query: string): Prepared { return new PgPreparedStatement(pool, query); },
