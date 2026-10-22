@@ -1,48 +1,37 @@
 # R&R POS
 
-Repository for the R&R POS Supabase migration and Cloudflare hosting.
+R&R POS is the current Supabase-backed POS workspace hosted on Cloudflare Workers. Its visual reference is the uploaded JEDS Minimart project.
 
-## Cloudflare hosting
+## Preview
 
-- **Cloudflare Worker (deployed):** https://rr-pos.rrpos.workers.dev
-- Health endpoint: https://rr-pos.rrpos.workers.dev/health
-- **Cloudflare Pages project (created):** [rr-pos Pages project](https://dash.cloudflare.com/def2642ca524b7ba17d3de7372c2ec36/pages/view/rr-pos)
-- Pages project URL when deployed: https://rr-pos.pages.dev
-- Cloudflare Pages Git integration could not be connected through the API because Cloudflare returned an internal Git installation authorization error. The Pages project exists, but has no deployment yet.
-- Worker source: `workers/rr-pos/index.js`; the hosted HTML is currently embedded in the Worker bundle. Future frontend changes should be redeployed to the Worker or Pages.
+- **JEDS-style R&R POS preview:** https://rr-pos-jeds-preview.rrpos.workers.dev
+- **Production Worker (unchanged by this preview):** https://rr-pos.rrpos.workers.dev
+- **GitHub review:** https://github.com/sericka513-stack/r-r-pos/pull/2
 
-## Supabase backend
+The preview Worker was deployed separately so the updated layout can be checked before changing production.
 
-- Supabase project: [rr-pos](https://supabase.com/dashboard/project/mwywfsuoedjcdahkiepd)
-- Project URL: `https://mwywfsuoedjcdahkiepd.supabase.co`
-- Edge Function: [pos-api](https://supabase.com/dashboard/project/mwywfsuoedjcdahkiepd/functions)
-- Function endpoint: `https://mwywfsuoedjcdahkiepd.supabase.co/functions/v1/pos-api`
-- Edge Function JWT verification: enabled.
-- Database schema: 29 public tables; RLS enabled on all tables.
-- Production data: not imported.
+## Stack
 
-## Current frontend status
+- **Hosting:** Cloudflare Workers
+- **Authentication:** Supabase Auth email/password
+- **Database:** Supabase PostgreSQL
+- **API:** Supabase Edge Function `pos-api`
+- **D1:** Not used by this deployment
 
-The initial interface supports Supabase Auth email/password sign-in, inventory viewing and adding products, recent sales, and a basic single-product checkout flow. It is **not a full feature-for-feature port** of the original Cloudflare/D1 POS app. Legacy admin/user workflows, GCash operations, receipts, reports, reconciliation, offline support, rollback/history and multi-item checkout still need migration and testing.
+Supabase project: https://supabase.com/dashboard/project/mwywfsuoedjcdahkiepd
 
-## Authentication setup required
+## Current preview features
 
-The frontend uses Supabase Auth email/password sign-in. A user must be created by a project administrator, and their **app metadata** must contain a trusted role of `admin`, `manager`, or `cashier`. Do not set roles in user-editable metadata. No login account has been provisioned, and old D1 username/password accounts have not been imported.
+The preview uses the JEDS Minimart-style dark-green sidebar, cream background, rounded white cards, responsive navigation and compact tables. It connects to the existing Supabase API for Dashboard data, checkout, inventory, sales, customers and suppliers.
 
-For the first administrator:
-1. Open Supabase Dashboard → Authentication → Users and create/invite the intended administrator account.
-2. Assign `app_metadata.role = admin` using a trusted server/admin workflow (not browser code).
-3. Sign in to the hosted POS and test with non-production data.
+Reports, cash management, GCash operations, account administration, activity logs, rollback/history and the full multi-item POS workflow have not yet been ported feature-for-feature. They are labelled in the UI instead of being represented as working features when they are not yet backed by the current API.
 
-## Security and data notes
+## Account and data status
 
-- The API requires a valid Supabase JWT and checks trusted `app_metadata.role`.
-- Direct `anon` and `authenticated` table grants are revoked; the Edge Function uses its server-side service key only after verifying the user.
-- Sale checkout uses a PostgreSQL transaction function to validate stock, decrement stock, write stock movements, and insert the sale atomically.
-- Do not expose a service-role key in frontend code.
-- No production data has been imported. The archive's production SQL dump and Wrangler account cache are intentionally excluded.
-- The old app's plaintext-password compatibility path was not ported.
+- One confirmed Supabase Auth user currently exists.
+- That Auth user has no trusted POS role in `app_metadata`; the API accepts `admin`, `manager` or `cashier` only. Role assignment must be done through a trusted admin workflow, not user-editable metadata.
+- The public POS tables currently contain no imported store records.
+- No D1 database was found in the currently connected Cloudflare account.
+- The uploaded JEDS Minimart archive contains the original interface and D1-oriented code, but no production data export. Consequently, legacy custom username/password accounts and historical sales/inventory are not imported by this code update.
 
-## Database choice
-
-Supabase is the sole database for this deployment. Cloudflare D1 is not needed unless we intentionally decide to migrate the app back to D1.
+Before production rollout, assign the intended existing account its correct trusted role and import original data only from a verified backup/export, if one is available. Do not expose a Supabase service-role key in the browser.
