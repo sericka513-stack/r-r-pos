@@ -68,6 +68,36 @@ Deno.serve(async (req: Request) => {
     if (action === "ping") return reply({ ok: true, database: "Supabase PostgreSQL", role });
     if (action === "authStatus") return reply({ ok: true, authenticated: true, user: { id: authData.user.id, email: authData.user.email, role } });
 
+    if (action === "recordSale") {
+      if (!["admin", "manager", "cashier"].includes(role)) return reply({ ok: false, error: "Insufficient role" }, 403);
+      const sale = body.sale;
+      const items = body.items;
+      if (!sale || typeof sale !== "object" || !Array.isArray(items)) return reply({ ok: false, error: "Expected sale and items" }, 400);
+      const { data, error } = await admin.rpc("record_pos_sale", { p_sale: sale, p_items: items });
+      if (error) {
+        const expected = /Insufficient stock|Product not found|Invalid sale|Each sale item/i.test(error.message);
+        return reply({ ok: false, error: expected ? error.message : "Could not record sale" }, expected ? 409 : 500);
+      }
+      return reply({ ok: true, data });
+    }
+
+    const legacyUpserts: Record<string, string> = {
+      saveProduct: "products", saveCustomer: "customers", saveSupplier: "suppliers",
+      saveSettings: "settings", saveCashManagementReport: "cash_management_report_daily",
+      saveReconciliation: "cash_reconciliation"
+    };
+    if (Object.hasOwn(legacyUpserts, action)) {
+      const table = legacyUpserts[action];
+      const row = body.row ?? body.product ?? body.customer ?? body.supplier ?? body.settings;
+      if (!row || typeof row !== "object" || Array.isArray(row)) return reply({ ok: false, error: "Missing record payload" }, 400);
+      if (!isAdmin && !CASHIER_TABLES.has(table)) return reply({ ok: false, error: "Insufficient role" }, 403);
+      const key = PRIMARY_KEYS[table];
+      if (!key || !Object.hasOwn(row, key)) return reply({ ok: false, error: `Missing primary key: ${key || "not configured"}` }, 400);
+      const { data, error } = await admin.from(table).upsert(row, { onConflict: key }).select().single();
+      if (error) throw new Error(error.message);
+      return reply({ ok: true, data });
+    }
+
     if (action === "getData") {
       const requested = Array.isArray(body.tables) ? body.tables.map(String) : TABLES;
       const names = [...new Set(requested)].filter(t => TABLES.includes(t) && (isAdmin || CASHIER_TABLES.has(t)));
