@@ -1,0 +1,23 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Cloudflare local state
+.wrangler/
+.dev.vars
+
+# Production data exports and backups
+*-production.sql
+*production*.sql
+*.dump
+*.bak
+backups/
+
+# Dependencies and generated output
+node_modules/
+dist/
+build/
+.DS_Store
