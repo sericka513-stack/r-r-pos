@@ -51,16 +51,23 @@ function sourceTables() {
 
 async function targetMetadata() {
   const rows = await pg.unsafe(
-    "SELECT table_name, column_name FROM information_schema.columns " +
+    "SELECT table_name, column_name, data_type FROM information_schema.columns " +
     "WHERE table_schema='public' ORDER BY table_name, ordinal_position"
   );
   const result = new Map();
   for (const row of rows) {
     const table = String(row.table_name);
-    if (!result.has(table)) result.set(table, new Set());
-    result.get(table).add(String(row.column_name));
+    if (!result.has(table)) result.set(table, new Map());
+    result.get(table).set(String(row.column_name), String(row.data_type));
   }
   return result;
+}
+
+function isPostgresNumericType(dataType) {
+  return new Set([
+    "smallint", "integer", "bigint", "numeric", "decimal",
+    "real", "double precision"
+  ]).has(String(dataType).toLowerCase());
 }
 
 function sourceRowCount(table) {
@@ -94,12 +101,20 @@ async function validateDestination(tables, metadata) {
   return counts;
 }
 
-function createInsert(table, columns, rows) {
+function createInsert(table, columns, rows, destinationColumns) {
   const colSql = columns.map(quoteIdent).join(", ");
   const parameters = [];
+  let normalizedEmptyNumericValues = 0;
   const valueGroups = rows.map((row, rowIndex) => {
     const values = columns.map((col, colIndex) => {
-      parameters.push(row[col] === undefined ? null : row[col]);
+      let value = row[col] === undefined ? null : row[col];
+      // SQLite allows empty strings in numeric-affinity columns; PostgreSQL rejects them.
+      // Preserve missing-value semantics by converting only blank numeric values to NULL.
+      if (typeof value === "string" && value.trim() === "" && isPostgresNumericType(destinationColumns.get(col))) {
+        value = null;
+        normalizedEmptyNumericValues++;
+      }
+      parameters.push(value);
       return "$" + (rowIndex * columns.length + colIndex + 1);
     });
     return "(" + values.join(", ") + ")";
@@ -107,6 +122,7 @@ function createInsert(table, columns, rows) {
   return {
     query: "INSERT INTO public." + quoteIdent(table) + " (" + colSql + ") VALUES " + valueGroups.join(", "),
     parameters,
+    normalizedEmptyNumericValues,
   };
 }
 
@@ -119,6 +135,7 @@ async function main() {
   if (!before) return;
 
   const summary = [];
+  const normalizedByTable = new Map();
   const chunkSize = 200;
   await pg.begin(async (tx) => {
     for (const table of tables) {
@@ -126,11 +143,15 @@ async function main() {
       if (!sourceColumns.length) continue;
       const rows = sqlite.prepare("SELECT * FROM " + quoteIdent(table) + " ORDER BY rowid").all();
       for (let offset = 0; offset < rows.length; offset += chunkSize) {
-        const statement = createInsert(table, sourceColumns, rows.slice(offset, offset + chunkSize));
+        const statement = createInsert(table, sourceColumns, rows.slice(offset, offset + chunkSize), metadata.get(table));
         await tx.unsafe(statement.query, statement.parameters);
+        if (statement.normalizedEmptyNumericValues) {
+          normalizedByTable.set(table, (normalizedByTable.get(table) || 0) + statement.normalizedEmptyNumericValues);
+        }
       }
-      summary.push({ table: table, rows: rows.length });
-      console.log("Imported " + table + ": " + rows.length + " row(s)");
+      const normalized = normalizedByTable.get(table) || 0;
+      summary.push({ table: table, rows: rows.length, blank_numeric_values_set_to_null: normalized });
+      console.log("Imported " + table + ": " + rows.length + " row(s)" + (normalized ? "; converted " + normalized + " blank numeric field(s) to NULL" : ""));
     }
 
     // Explicitly inserted SQLite AUTOINCREMENT IDs do not advance a PostgreSQL
