@@ -1,27 +1,39 @@
 # R&R POS
 
-Repository for the R&R POS application.
+Repository for the R&R POS Supabase migration.
 
-## Deployment status
+## Live backend
 
 - Supabase project: [rr-pos](https://supabase.com/dashboard/project/mwywfsuoedjcdahkiepd)
-- Region: `ap-southeast-1` (Singapore)
 - Project URL: `https://mwywfsuoedjcdahkiepd.supabase.co`
-- PostgreSQL schema: **created and verified** (29 tables; row-level security enabled on all 29).
-- Application source and API port: **not yet deployed**.
-- Production data: **not imported**.
+- Edge Function: [pos-api](https://supabase.com/dashboard/project/mwywfsuoedjcdahkiepd/functions)
+- Function endpoint: `https://mwywfsuoedjcdahkiepd.supabase.co/functions/v1/pos-api`
+- Edge Function JWT verification: enabled.
+- Database schema: 29 public tables; RLS enabled on all tables.
+- Production data: not imported.
 
-The supplied application is built around Cloudflare Pages/D1. The schema migrations in `supabase/migrations/` establish the PostgreSQL tables, but the existing SQLite/D1 API cannot run against Supabase unchanged. The API and authentication must be ported and tested before the site can be considered deployable.
+## Current frontend
 
-## Security
+`public/index.html` is an initial Supabase-connected starter interface for sign-in, inventory listing/addition, recent sales, and a one-product checkout flow. It is **not a full feature-for-feature port** of the supplied Cloudflare/D1 POS app. The legacy API actions for users/admin workflows, full GCash operations, receipts, reports, reconciliation, offline support, rollback/history and multi-item checkout still need migration and testing.
 
-The database currently has no production records. Operational tables have row-level security enabled and direct `anon`/`authenticated` table grants revoked until the API has proper authentication and authorization. The legacy users table deliberately has no plaintext password column. Use Supabase Auth or an equivalently secure server-side auth design; never expose a service-role key in browser code.
+## Authentication setup required
 
-Never commit production database exports, customer/transaction data, credentials, `.env` files, or local Cloudflare/Wrangler account state. The original archive's production SQL dump and `.wrangler` cache are intentionally excluded.
+The frontend uses Supabase Auth email/password sign-in. A user must be created by a project administrator, and their **app metadata** must contain a trusted role of `admin`, `manager`, or `cashier`. Do not set roles in user-editable metadata. No login account has been provisioned by this deployment, and the old D1 username/password accounts have not been imported.
 
-## Next steps
+For the first administrator:
+1. Open Supabase Dashboard → Authentication → Users and create/invite the intended administrator account.
+2. Assign `app_metadata.role = admin` using a trusted server/admin workflow (not from browser code).
+3. Test sign-in at the deployed frontend after hosting is configured.
 
-1. Port the D1 API actions to a secure Supabase-backed API.
-2. Migrate authentication and role checks; remove plaintext-password retrieval and compatibility paths.
-3. Upload the sanitized frontend/assets and configure deployment secrets outside Git.
-4. Test with non-production data before importing any approved production data.
+## Security and data notes
+
+- The API requires a valid Supabase JWT and checks trusted `app_metadata.role`.
+- Direct `anon` and `authenticated` table grants are revoked; the Edge Function uses its server-side service key only after verifying the user.
+- Sale checkout uses a PostgreSQL transaction function to validate stock, decrement stock, write stock movements, and insert the sale atomically.
+- Do not expose a service-role key in frontend code.
+- No production data has been imported. The archive's production SQL dump and Wrangler account cache are intentionally excluded.
+- The old app's plaintext-password compatibility path was not ported.
+
+## Hosting status
+
+The code is in GitHub, but the frontend is not yet published to a public website. Connect this repository to a static host such as Cloudflare Pages or configure GitHub Pages before treating the site as live. Test with non-production data before importing any approved business data.
