@@ -162,7 +162,7 @@ async function audit(env, action, record, details, meta = {}, changes = []) {
     if (changes && changes.length) {
       await insertObj(env, "change_history", { history_id: makeId("CH"), log_id: logId, datetime: dt, target_date: dt.slice(0, 10), action: event.action, user: event.user, changes_json: JSON.stringify(changes), status: "Available", rolled_back_by: "", rolled_back_at: "" });
     }
-  } catch (e) { console.error("D1 audit write failed; business operation was not rolled back.", str(e && e.message || e)); }
+  } catch (e) { console.error("Supabase audit write failed; business operation was not rolled back.", str(e && e.message || e)); }
   return logId;
 }
 async function recordOfflineActivity(env,event,meta,session){
@@ -383,7 +383,7 @@ async function notifyRowsForRole(env, role) {
   return logs.filter(r => activityVisible(r.action, role, r.user, admins));
 }
 async function unreadCount(env, userId, role) {
-  // Ask D1 for unread entries only instead of loading every activity row and every
+  // Query PostgreSQL for unread entries only instead of loading every activity row and every
   // read marker into the Worker on each notification refresh.
   const unreadRows = await dbAll(env,
     "SELECT l.log_id,l.action,l.user FROM activity_log l WHERE NOT EXISTS (SELECT 1 FROM activity_reads r WHERE r.user_id=? AND r.log_id=l.log_id) ORDER BY l.rowid",
@@ -2664,10 +2664,10 @@ async function ensureGcashReceiptColumns(env) {
   const definitions = { receipt_data: "TEXT", receipt_file_name: "TEXT", receipt_content_type: "TEXT", receipt_size: "INTEGER", receipt_uploaded_at: "TEXT", receipt_uploaded_by: "TEXT" };
   for (const [name, type] of Object.entries(definitions)) if (!existing.has(name)) await dbRun(env, "ALTER TABLE gcash_transactions ADD COLUMN " + qi(name) + " " + type);
 }
-async function d1ApiAction(request, env, data) {
+async function storeApiAction(request, env, data) {
   const action=str(data.action||"ping");
   const metaPublic=await requestMeta(request,data,null);
-  if(action==="ping") return {ok:true,message:"Sari-Sari Store API online",database:"Supabase PostgreSQL",timeZone:TZ};
+  if(action==="ping") { await dbFirst(env,"SELECT 1 AS connected"); return {ok:true,message:"Jeds Minimart Supabase API online",database:"Supabase PostgreSQL",timeZone:TZ}; }
   if(action==="authStatus") return authStatus(env,data.authToken);
   if(action==="login") return login(env,data,metaPublic);
   if(action==="forgotPassword") return forgotPassword(env,data);
@@ -2775,7 +2775,7 @@ async function d1ApiAction(request, env, data) {
   }
   if(action==="setup") {
     if(session.role!=="Admin")return {ok:false,error:"Only an administrator can run setup."};
-    return {ok:true,message:"Cloudflare D1 database is ready.",database:"Supabase PostgreSQL",timeZone:TZ};
+    return {ok:true,message:"Supabase PostgreSQL database is ready.",database:"Supabase PostgreSQL",timeZone:TZ};
   }
   if(action==="recordOfflineActivity") return recordOfflineActivity(env,data.event,meta,session);
   if(action==="saveSalesDeduction") {
@@ -2861,7 +2861,7 @@ async function d1ApiAction(request, env, data) {
   if(action==="deleteCashReconciliationRecord") return deleteCashReconciliationRecord(env,data.date,meta,session);
   return {ok:false,error:"Unknown action: "+action};
 }
-export async function handleD1Api(request, env) {
+export async function handleStoreApi(request, env) {
   const headers={"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store, max-age=0","X-Content-Type-Options":"nosniff"};
   const reply=(obj,status=200)=>new Response(JSON.stringify(obj),{status:status,headers:headers});
   if(request.method!=="POST") return reply({ok:false,error:"Use POST for store API requests."},405);
@@ -2874,6 +2874,6 @@ export async function handleD1Api(request, env) {
   let data;
   try { data=JSON.parse(new TextDecoder().decode(bytes)); } catch (_) { return reply({ok:false,error:"The API request must contain valid JSON."},400); }
   if(!data||typeof data!=="object"||Array.isArray(data)||typeof data.action!=="string") return reply({ok:false,error:"The API request is missing a valid action."},400);
-  try { Object.defineProperty(request,"__env",{value:env,configurable:true}); return reply(await d1ApiAction(request,env,data)); }
-  catch(e) { console.error("D1 API action failed:",str(e&&e.message||e)); return reply({ok:false,error:str(e&&e.message||e||"Unexpected server error.")},200); }
+  try { Object.defineProperty(request,"__env",{value:env,configurable:true}); return reply(await storeApiAction(request,env,data)); }
+  catch(e) { console.error("Supabase API action failed:",str(e&&e.message||e)); return reply({ok:false,error:str(e&&e.message||e||"Unexpected server error.")},200); }
 }
