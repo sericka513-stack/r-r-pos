@@ -1,4 +1,4 @@
-const HTML = String.raw\`<!doctype html>
+const HTML = String.raw`<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -142,7 +142,7 @@ function renderDashboard(){const today=localDay();const todaySales=sales.filter(
 function renderProductOptions(){$("saleProduct").innerHTML=products.filter(p=>Number(p.stock)>0).map(p=>"<option value='"+esc(p.product_id)+"'>"+esc(p.product_name)+" — stock "+(Number(p.stock)||0)+" — "+esc(money(p.selling_price))+"</option>").join("")||"<option value=''>No products in stock</option>";updateCheckoutTotal()}
 function updateCheckoutTotal(){const p=products.find(x=>x.product_id===$("saleProduct").value);const qty=Number($("saleQty").value)||0;const total=p?qty*Number(p.selling_price||0):0;$("checkoutTotal").textContent=p?"Estimated total: "+money(total):"Choose a product with stock to see its total."}
 async function load(){if(loading)return;loading=true;status("Loading store records…");try{const r=await api("getData",{tables:["products","sales","customers","suppliers","categories"]});const d=r.data||{};products=Array.isArray(d.products)?d.products:[];sales=Array.isArray(d.sales)?d.sales:[];customers=Array.isArray(d.customers)?d.customers:[];suppliers=Array.isArray(d.suppliers)?d.suppliers:[];renderProducts();renderCustomers();renderSuppliers();renderSales("sales",500);renderProductOptions();renderDashboard();status("Supabase connected. Loaded "+products.length+" products, "+sales.length+" sales, "+customers.length+" customers and "+suppliers.length+" suppliers.");await updateConnectionDetails()}catch(e){status(e.message,true);await updateConnectionDetails(e.message)}finally{loading=false}}
-async function updateConnectionDetails(errorText){const el=$("connectionDetails");if(!el)return;const who=sessionUser?.email||"No signed-in user";const roleTxt=role||"not assigned";el.textContent=(errorText?"Connection/API status: "+errorText+"\\n":"")+ "Signed in as: "+who+"\\nPOS role: "+roleTxt+"\\nData backend: Supabase PostgreSQL\\nD1 dependency: none";if(errorText)el.classList.add("error");else el.classList.remove("error")}
+async function updateConnectionDetails(errorText){const el=$("connectionDetails");if(!el)return;const who=sessionUser?.email||"No signed-in user";const roleTxt=role||"not assigned";el.textContent=(errorText?"Connection/API status: "+errorText+"\n":"")+ "Signed in as: "+who+"\nPOS role: "+roleTxt+"\nData backend: Supabase PostgreSQL\nD1 dependency: none";if(errorText)el.classList.add("error");else el.classList.remove("error")}
 async function enterSession(session){if(!session){sessionUser=null;role="";$("loginScreen").classList.remove("hidden");$("appShell").classList.add("hidden");return}sessionUser=session.user||null;role=String(sessionUser?.app_metadata?.role||"").toLowerCase();$("loginScreen").classList.add("hidden");$("appShell").classList.remove("hidden");$("who").textContent=sessionUser?.email||"Signed in";todayText();showPage(activePage);if(!["admin","manager","cashier"].includes(role)){status("You are signed in, but this account has no POS role in trusted app_metadata. Ask the project administrator to assign admin, manager or cashier in Supabase Authentication. No user role is read from editable profile metadata.",false,true);await updateConnectionDetails("POS role is not assigned");return}try{await api("authStatus");await load()}catch(e){status(e.message,true);await updateConnectionDetails(e.message)}}
 $("loginForm").addEventListener("submit",async e=>{e.preventDefault();const b=$("signInBtn");b.disabled=true;showMessage("loginStatus","Signing in…");try{const {data,error}=await supabase.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});if(error)throw error;await enterSession(data.session)}catch(err){showMessage("loginStatus",err.message||"Sign-in failed",true)}finally{b.disabled=false}});
 $("logout").addEventListener("click",async()=>{await supabase.auth.signOut();await enterSession(null)});
@@ -159,7 +159,7 @@ supabase.auth.onAuthStateChange((_event,session)=>{void enterSession(session)});
 const {data:{session}}=await supabase.auth.getSession();await enterSession(session);
 </script>
 </body>
-</html>\`;
+</html>`;
 export default {
   async fetch(request) {
     const url = new URL(request.url);
