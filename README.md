@@ -17,8 +17,8 @@ To import it safely on your own computer:
 
 1. Extract `jeds-minimart-production.sql` from your private ZIP. Keep that SQL file private.
 2. Use Node.js 22.13 or newer and install the pinned client in this project folder: `npm install --no-save postgres@3.4.7`.
-3. In Supabase Dashboard → Connect, copy a PostgreSQL connection URI. If your network has no IPv6 support, choose the Session Pooler connection. In your local terminal set it as `SUPABASE_DB_URL`; never paste it into chat or commit it.
-4. Run `node scripts/import-jeds-sql.mjs "/path/to/jeds-minimart-production.sql"`.
+3. In Supabase Dashboard → Connect, copy a PostgreSQL connection URI. If your network has no IPv6 support, choose the Session Pooler connection. Put it in a local `.env.local` file as `SUPABASE_DB_URL=...`. The repository ignores `.env.local`; never paste the URI into chat or commit it.
+4. Run `node --env-file=.env.local scripts/import-jeds-sql.mjs "/path/to/jeds-minimart-production.sql"`.
 
 The script checks destination tables and columns first, refuses to import over existing rows, imports within a PostgreSQL transaction, preserves legacy user hashes/salts/session records, resets the stock-movement identity sequence, and verifies row counts. It only prints table names and row counts. Do not run it twice against a non-empty database.
 
